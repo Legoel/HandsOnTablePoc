@@ -1,0 +1,261 @@
+﻿@page
+@model HandsOnTableModel
+@{
+    ViewData["Title"] = "HandsOnTable Grid";
+    var products = Model.Products;
+    var manufacturers = Model.Manufacturers;
+}
+@section Links{
+    <link href="~/handsontable/handsontable.full.min.css" rel="stylesheet" />
+}
+@section Scripts{
+    <script src="~/handsontable/handsontable.full.min.js"></script>
+    <script src="~/js/customrenderers.js"></script>
+    <script>
+
+        const postUrl = "https://localhost:7299/HandsOnTable"
+        var products = @Json.Serialize(products);
+        var manufacturers = @Json.Serialize(manufacturers);
+        var stackedChanges = {};
+
+        const container = document.getElementById("handsontable");
+
+        document.getElementById("saveBtn")
+        .addEventListener(
+            "click",
+            () => saveData()
+        );
+
+        function saveData() {
+            const response = fetch(postUrl, {
+                method: "POST",
+                body: JSON.stringify(manufacturers),
+                headers:
+                {
+                    "RequestVerificationToken": $('input:hidden[name="__RequestVerificationToken"]').val()
+                },
+            })
+        }
+
+        const hot = new Handsontable(container, {
+            // Initialize les données affichées dans la grille
+            data: products,
+            // configuration des types de colonnes
+            columns: [
+                { data: "id", type: "numeric" }, // Type numérique 'simple'
+                { data: "name" }, // Type texte 'simple' (type par défaut pour toutes les cellules)
+                {
+                    data: "manufacturer.name",
+                    renderer: "silae.manufacturer", // Un renderer spécifique permettant d'afficher une icone 'Pays' devant la valeur
+                    type: "dropdown", // Type 'liste de choix'
+                    source(query, callback) { // function permettant de spécifier les choix possibles
+                        callback(manufacturers.map(m => m.name));
+                    }
+                },
+                {
+                    data: "priceDollar",
+                    type: "numeric",
+                    numericFormat: {
+                        pattern: '$0,0.00', // format d'affichage du numérique
+                        culture: 'en-US' // D'autres cultures sont possibles en ajoutant les script numbro (https://numbrojs.com/index.html)
+                    },
+                },
+                {
+                    data: "stock",
+                    renderer: "silae.conditional", // Un renderer spécifique permettant d'ajouter une mise en forme conditionnelle aux cellules
+                    className: "stock htMiddle",
+                    green: (val) => val >= 50, // les fonctions permettant d'indiquer quelle icône ajouter à la cellule en focntion de la valeur
+                    yellow: (val) => val >= 10,
+                    orange: (val) => val >= 1,
+                    red: (val) => val < 1
+                },
+                { data: "available", type: "checkbox" }, // Type 'checkbox' simple
+                {
+                    data: "status",
+                    renderer: "silae.arrayMap",
+                    readonly: true,
+                    map: ["", "Enregistrée", "Validée", "Prête", "Envoyée", "Reçue"],
+                },
+                {
+                    data: "availabilityDateJson",
+                    type: "date",
+                    dateFormat: "DD-MM-YYYY", // Permet d'indiquer le format d'affichage (voif https://momentjs.com/ pour les formats)
+                    // Si true, l'éditeur essaie de remettre automatiquement les entrées manuelles dans le bon format
+                    //  mais d'après mes tests c'est un peu hasardeux (en tout cas avec un format de date français)
+                    // Par exemple la valeur 2023-03-14 est transformée en 20-03-2014... pas génial
+                    // Ca focntionne peut-être mieux avec un format de date américain (MM-DD-YYYY)...?
+                    correctFormat: false
+                },
+                {
+                    data: "description",
+                    // Un renderer spécifique pour afficher le contenu complet de la cellule sous forme de "tootlip" standard HTML (attribut 'title' de la balise td),
+                    // On pourrait utiliser une bibliothèque dédiée avec plus de fonctionnalité : Bootstrap, Popper, etc.
+                    renderer: "silae.tooltip",
+                    type: "text",
+                    width: 150
+                },
+                {
+                    data: "rating",
+                    renderer: starRenderer, // Un renderer pour afficher la valeur sous forme d'étoiles
+                    readOnly: true,
+                    className: "star htCenter"
+                }
+            ],
+
+            // Masquer des colonnes, ici la colonne Id
+            hiddenColumns: {
+                columns: [0],
+                copyPasteEnabled: false, // La colonne ne sera pas prise en compte dans un copier-coller des valeurs
+                indicators: false // Pas d'indicateur que la colonne est masquée, donc l'utilisateur ne peut pas l'afficher avec le menu contextuel par exemple
+            },
+
+            // Menu contextuel (clic droit)
+            //contextMenu: true, // (menu contextuel standard)
+            contextMenu: [ // (menu contextuel personalisé, il existe des options encore plus avancées, voir documentation)
+                'row_above',
+                'row_below',
+                'remove_row',
+                '---------',
+                'alignment',
+                '---------',
+                'undo',
+                'redo',
+            ],
+            //contextMenu: false, // (pas de menu contextuel)
+            //locale: "fr-FR",
+
+            // En-tête de colonnes et numérotation de lignes
+            colHeaders: [
+                "Id",
+                "Produit",
+                "Fabricant",
+                "Prix",
+                "Stock",
+                "Dispo",
+                "Commande",
+                "Date de dispo",
+                "Description",
+                "Rating"
+            ],
+            rowHeaders: true, // numéro de ligne standard
+            //rowHeaders: (index) => {return index.toString(16);}, // numérotation de ligne héxadécimal, ça ne sert à rien c'est pour l'exemple
+
+            // Largeur des colonnes
+            // Le calcul auto des largeurs de colonnes est activé par défaut,
+            // Si la grille contient beaucoup de lignes, le calcul des largeurs peut avoir un impact sur les performances
+            // Dans ce cas, la configuration du plugin AutoColumSize permet de diminuer l'impact du calcul
+            autoColumnSize: true,
+
+            // Spécifier les largeurs de chaque colonne, on peut aussi utiliser une fonction
+            // ou spécifier la largeur dans la configuration de la colonne (cf. ci-dessus la colonne "Description")
+            //colWidths: [
+            //    150,
+            //    150,
+            //    35,
+            //    35,
+            //    35,
+            //    150,
+            //    25,
+            //    200,
+            //    80
+            //],
+
+            // Hauteur des lignes
+            // Par défaut la hauteur de ligne permet d'afficher tout le contenu de la ligne
+            // Si une colonne contient de
+            //autoRowSize: false,
+            wordWrap: false,
+
+            // Avec une hauteur de ligne égale à 23, on voit apparaitre un décalage entre les numéros de ligne et les données
+            // La hauteur de ligne minimum est de 23 pixels donc une hauteur inférieure ne sera pas prise en compte
+            // Toutefois si on met une valeur inférieure elle n'est pas respectée mais on ne voit aucun décalage apparaitre
+            rowHeights: 24,
+
+            // Permet de sépcifier les dimensions du container de la grille,
+            // On peut mettre une valeur numérique (pixels) ou mettre une "dimension CSS" valide
+            //width: "50%",
+            height: "auto", //500,
+
+            // Plugins
+            // Active ou non le plugin gérant la liste déroulante des entêtes de colonnes
+            // On peut personaliser les éléments affichés comme pour le menu contextuel (cf ci-dessus)
+            dropdownMenu: true,
+
+            // Active ou non le plugin gérant le tri multiple mais apparemment le tri multiple n'est accessible qu'avec l'API,
+            // Je n'ai pas trouvé de raccourci clavier / combinaison clavier-souris pour activer un tri sur plusieurs colonnes à la fois
+            multiColumnSorting: true,
+
+            // Active ou non le plugin gérant le filtre au niveau des colonnes
+            filters: true,
+
+            // Active ou non le plugin gérant l'export fichier (accessible via l'API)
+            exportFiles: true,
+
+            // Active ou non les plugin gérant le redimensionnement et le déplacement manuel des lignes et colonnes
+            manualColumnMove: true,
+            manualColumnResize: true,
+            manualRowMove: true,
+            manualRowResize: true,
+
+            // Évènements
+            // Possibilité de gérer des évènements directement dans la configuration de la grille
+            // Sinon on peut aussi utiliser l'API : méthode "addHook" (cf ci-dessous)
+            //afterChange: (changes) => {
+            //    console.log(changes);
+            //},
+
+            // Licence
+            // A remplacer par le clé de licence pour un usage commercial
+            licenseKey: "non-commercial-and-evaluation"
+        });
+
+        // Modifie le comportement 'normal' de la grille
+        // Oblige l'utilisateur à double cliquer sur une cellule pour entrer en édition.
+        // Il peut y avoir des effets de bords qui n'ont pas été détéctés pendant la phase de test
+        hot.addHook('beforeKeyDown', (e) => {
+            console.log(e);
+            // On ne modifie pas le comportement des touches de déplacement : flèches du clavier, Début, Fin, Page Up/Down
+            if (e.keyCode < 33 || e.keyCode > 40) {
+                // On récupère l'éditeur actif (cellule sélectionée)
+                // Et si cet éditeur n'est pas déjà ouvert, on bloque toutes les saisies au clavier
+                let editor = hot.getActiveEditor();
+                if (editor && !editor.isOpened()) {
+                    event.stopImmediatePropagation();
+                    event.preventDefault();
+                    return false;
+                }
+            }
+        });
+
+        hot.addHook('afterChange', (changes) => {
+            console.log(changes);
+            //console.log(hot.getDataAtRow(changes[0][0]));
+            let diary = document.getElementById("console");
+            changes.forEach((change) => {
+                let modifiedId = hot.getDataAtCell(change[0], 0);
+                const message = `For product '${modifiedId}', property '${change[1]}' has been modified from '${change[2]}' to '${change[3]}'`
+                console.log(message);
+                if (diary) {
+                    let log = document.createElement("p");
+                    log.innerText = message;
+                    diary.appendChild(log);
+                }
+
+                //let cell = hot.getCell(change[0], 1);
+                //Handsontable.dom.addClass(cell, "dirty");
+            });
+        });
+    </script>
+}
+
+<h1>@ViewData["Title"]</h1>
+
+<p>Demonstration of <a href="https://handsontable.com/">HandsOnTable grid</a>.</p>
+
+<div id="console"></div>
+
+<form>
+    <input id="saveBtn" type="button" value="Save" class="btn btn-primary" />
+</form>
+
+<div id="handsontable"></div>

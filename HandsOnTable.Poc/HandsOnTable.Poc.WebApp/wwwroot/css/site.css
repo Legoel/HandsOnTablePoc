@@ -1,0 +1,38 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+
+table.htCore td .progressBar {
+    background: #37bc6c;
+    height: 10px;
+}
+
+table.htCore td.star {
+    color: #fcb515;
+}
+.floatRight {
+    float: right;
+    padding-right: 20px;
+}
+
+.floatLeft {
+    float: left;
+}
+.dirty {
+    color: red;
+}
